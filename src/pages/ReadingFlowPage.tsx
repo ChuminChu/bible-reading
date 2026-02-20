@@ -41,7 +41,7 @@ export default function ReadingFlowPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { version, setVersion, versionName } = useBibleVersion();
-  const { toggleDay } = useReadingProgress();
+  const { markDayComplete } = useReadingProgress();
 
   const dayNumber = dayParam ? Number(dayParam) : getDayNumber(new Date()) ?? 1;
   const plan = getDayPlan(dayNumber);
@@ -61,6 +61,12 @@ export default function ReadingFlowPage() {
           checked.add(idx);
         }
       });
+      // If all chapters are already completed, show re-read prompt instead of auto-advancing
+      if (checked.size === chapters.length && chapters.length > 0) {
+        setCheckedSet(checked);
+        setAllDone(true);
+        return;
+      }
       setCheckedSet(checked);
       // Start at first unchecked chapter
       const firstUnchecked = chapters.findIndex((_, i) => !checked.has(i));
@@ -82,23 +88,25 @@ export default function ReadingFlowPage() {
     newChecked.add(currentIdx);
     setCheckedSet(newChecked);
 
-    await progressService.toggleChapterComplete(user.id, current.bookCode, current.chapter, true);
+    // Save chapter to DB in background (don't block next-chapter advance)
+    progressService.toggleChapterComplete(user.id, current.bookCode, current.chapter, true).catch(
+      (err) => console.error('Failed to save chapter progress:', err),
+    );
 
-    // All chapters done?
+    // All chapters done? → await DB save before showing completion
     if (newChecked.size === chapters.length) {
-      // Mark the day as completed too
-      await toggleDay(dayNumber);
+      await markDayComplete(dayNumber, true);
       setAllDone(true);
       return;
     }
 
-    // Advance to next unchecked chapter
+    // Advance to next unchecked chapter immediately
     const nextIdx = chapters.findIndex((_, i) => i > currentIdx && !newChecked.has(i));
     if (nextIdx >= 0) {
       setCurrentIdx(nextIdx);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [current, currentIdx, checkedSet, chapters, user, dayNumber, toggleDay]);
+  }, [current, currentIdx, checkedSet, chapters, user, dayNumber, markDayComplete]);
 
   const handleManualCheck = useCallback(async (idx: number) => {
     if (!user) return;
@@ -113,14 +121,17 @@ export default function ReadingFlowPage() {
     }
     setCheckedSet(newChecked);
 
-    await progressService.toggleChapterComplete(user.id, ch.bookCode, ch.chapter, !isChecked);
+    // Save to DB in background
+    progressService.toggleChapterComplete(user.id, ch.bookCode, ch.chapter, !isChecked).catch(
+      (err) => console.error('Failed to save chapter progress:', err),
+    );
 
-    // Check if all done
+    // Check if all done → await DB save
     if (newChecked.size === chapters.length) {
-      await toggleDay(dayNumber);
+      await markDayComplete(dayNumber, true);
       setAllDone(true);
     }
-  }, [checkedSet, chapters, user, dayNumber, toggleDay]);
+  }, [checkedSet, chapters, user, dayNumber, markDayComplete]);
 
   if (!plan) {
     return (
@@ -132,6 +143,20 @@ export default function ReadingFlowPage() {
       </div>
     );
   }
+
+  const handleRestart = useCallback(async () => {
+    if (!user) return;
+    // Reset all chapter progress for this day's chapters
+    for (const ch of chapters) {
+      await progressService.toggleChapterComplete(user.id, ch.bookCode, ch.chapter, false);
+    }
+    // Reset day completion
+    await markDayComplete(dayNumber, false);
+    setCheckedSet(new Set());
+    setCurrentIdx(0);
+    setAllDone(false);
+    window.scrollTo(0, 0);
+  }, [user, chapters, dayNumber]);
 
   // All done screen
   if (allDone) {
@@ -147,12 +172,20 @@ export default function ReadingFlowPage() {
         <p className="text-sm text-text-muted text-center mb-8">
           {chapters.length}장을 모두 읽었습니다. 수고하셨습니다!
         </p>
-        <button
-          onClick={() => navigate('/')}
-          className="px-8 py-3 bg-primary-500 text-white rounded-xl font-semibold hover:bg-primary-600 transition-colors"
-        >
-          홈으로 돌아가기
-        </button>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button
+            onClick={handleRestart}
+            className="w-full px-8 py-3 border border-primary-300 text-primary-600 rounded-xl font-semibold hover:bg-primary-50 transition-colors"
+          >
+            다시 읽기
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full px-8 py-3 bg-primary-500 text-white rounded-xl font-semibold hover:bg-primary-600 transition-colors"
+          >
+            홈으로 돌아가기
+          </button>
+        </div>
       </div>
     );
   }

@@ -66,8 +66,8 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-100 mb-4">
             <BookOpen size={32} className="text-primary-600" />
           </div>
-          <h1 className="text-2xl font-bold text-text-primary">동행300일</h1>
-          <p className="text-sm text-text-secondary mt-1">성경통독과 함께하는 여정</p>
+          <h1 className="text-2xl font-bold text-text-primary">충교 청년초원</h1>
+          <p className="text-lg font-semibold text-text-secondary mt-1">300일 성경통독</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

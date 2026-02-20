@@ -1,108 +1,7 @@
 import type { DayPlan, ReadingRange } from '../types/plan';
-import { OT_DAYS, NT_DAYS } from '../lib/constants';
-import { getBookByCode, getBooksByTestament } from './bibleBooks';
-import type { BibleBook } from '../types/bible';
+import { getBookByCode } from './bibleBooks';
 
-// ─── Internal helpers ────────────────────────────────────────────────
-
-/**
- * Builds a flat list of { bookCode, chapter } entries for every chapter in the
- * given book list, preserving canonical order.
- */
-function flattenChapters(books: BibleBook[]): { bookCode: string; chapter: number }[] {
-  const result: { bookCode: string; chapter: number }[] = [];
-  for (const book of books) {
-    for (let ch = 1; ch <= book.chapters; ch++) {
-      result.push({ bookCode: book.code, chapter: ch });
-    }
-  }
-  return result;
-}
-
-/**
- * Distribute `totalChapters` chapters across `totalDays` days as evenly as
- * possible.  Returns an array of length `totalDays` where each element is the
- * number of chapters to read that day.
- *
- * Uses an accumulator approach so the remainder is spread across days rather
- * than lumped at the end.
- */
-function distributeCounts(totalChapters: number, totalDays: number): number[] {
-  const counts: number[] = [];
-  let assigned = 0;
-
-  for (let day = 0; day < totalDays; day++) {
-    // How many chapters *should* have been read by end of this day?
-    const targetCumulative = Math.round(((day + 1) * totalChapters) / totalDays);
-    const todayCount = targetCumulative - assigned;
-    counts.push(todayCount);
-    assigned += todayCount;
-  }
-
-  return counts;
-}
-
-/**
- * Compress a list of { bookCode, chapter } entries into contiguous
- * ReadingRange objects. Consecutive chapters within the same book are merged
- * into a single range.
- */
-function compressToRanges(
-  chapters: { bookCode: string; chapter: number }[],
-): ReadingRange[] {
-  if (chapters.length === 0) return [];
-
-  const ranges: ReadingRange[] = [];
-  let current: ReadingRange = {
-    bookCode: chapters[0].bookCode,
-    startChapter: chapters[0].chapter,
-    endChapter: chapters[0].chapter,
-  };
-
-  for (let i = 1; i < chapters.length; i++) {
-    const ch = chapters[i];
-    if (
-      ch.bookCode === current.bookCode &&
-      ch.chapter === current.endChapter + 1
-    ) {
-      // Extend current range
-      current.endChapter = ch.chapter;
-    } else {
-      ranges.push(current);
-      current = {
-        bookCode: ch.bookCode,
-        startChapter: ch.chapter,
-        endChapter: ch.chapter,
-      };
-    }
-  }
-  ranges.push(current);
-  return ranges;
-}
-
-/**
- * Build a human-readable Korean label for a day's reading ranges.
- * Examples:
- *   - "창 1-4"
- *   - "창 49-50, 출 1-2"
- *   - "옵 1"               (single chapter)
- */
-function buildLabel(ranges: ReadingRange[]): string {
-  return ranges
-    .map((r) => {
-      const book = getBookByCode(r.bookCode);
-      const name = book ? book.name : r.bookCode;
-      // Use a short name: strip trailing 서/기 for brevity where the full name
-      // is unambiguous? -- Actually, Korean Bible apps typically use the full
-      // name. We'll use a short-name map for the most common abbreviations.
-      const shortName = getShortName(name);
-      if (r.startChapter === r.endChapter) {
-        return `${shortName} ${r.startChapter}`;
-      }
-      return `${shortName} ${r.startChapter}-${r.endChapter}`;
-    })
-    .join(', ');
-}
+// ─── Label helpers ──────────────────────────────────────────────────
 
 /**
  * Return a conventional short Korean name for labelling.
@@ -180,62 +79,357 @@ function getShortName(fullName: string): string {
   return map[fullName] ?? fullName;
 }
 
-// ─── Plan generation ─────────────────────────────────────────────────
-
 /**
- * Generate the full 288-day reading plan.
- *
- * Days 1-216  : Old Testament (929 chapters across 216 days)
- * Days 217-288: New Testament (260 chapters across 72 days)
+ * Build a human-readable Korean label for a day's reading ranges.
+ * Examples:
+ *   - "창 1-5"
+ *   - "옵 1, 욘 1-4"
+ *   - "시 119"               (single chapter)
  */
-export function generateReadingPlan(): DayPlan[] {
-  const plan: DayPlan[] = [];
-
-  // --- Old Testament ---
-  const otBooks = getBooksByTestament('OT');
-  const otChapters = flattenChapters(otBooks);
-  const otCounts = distributeCounts(otChapters.length, OT_DAYS);
-
-  let chapterIdx = 0;
-  for (let day = 0; day < OT_DAYS; day++) {
-    const count = otCounts[day];
-    const dayChapters = otChapters.slice(chapterIdx, chapterIdx + count);
-    chapterIdx += count;
-
-    const ranges = compressToRanges(dayChapters);
-    plan.push({
-      dayNumber: day + 1,
-      ranges,
-      label: buildLabel(ranges),
-    });
-  }
-
-  // --- New Testament ---
-  const ntBooks = getBooksByTestament('NT');
-  const ntChapters = flattenChapters(ntBooks);
-  const ntCounts = distributeCounts(ntChapters.length, NT_DAYS);
-
-  chapterIdx = 0;
-  for (let day = 0; day < NT_DAYS; day++) {
-    const count = ntCounts[day];
-    const dayChapters = ntChapters.slice(chapterIdx, chapterIdx + count);
-    chapterIdx += count;
-
-    const ranges = compressToRanges(dayChapters);
-    plan.push({
-      dayNumber: OT_DAYS + day + 1,
-      ranges,
-      label: buildLabel(ranges),
-    });
-  }
-
-  return plan;
+function buildLabel(ranges: ReadingRange[]): string {
+  return ranges
+    .map((r) => {
+      const book = getBookByCode(r.bookCode);
+      const name = book ? book.name : r.bookCode;
+      const shortName = getShortName(name);
+      if (r.startChapter === r.endChapter) {
+        return `${shortName} ${r.startChapter}`;
+      }
+      return `${shortName} ${r.startChapter}-${r.endChapter}`;
+    })
+    .join(', ');
 }
 
-// ─── Cached plan & accessor ──────────────────────────────────────────
+// ─── Compact data representation ────────────────────────────────────
+//
+// Each entry is: [bookCode, startChapter, endChapter]
+// For days with multiple ranges, there are multiple tuples.
+// For review days (216, 288), an empty array signals no reading.
 
-/** The complete 288-day reading plan (computed once). */
-export const readingPlan: DayPlan[] = generateReadingPlan();
+type RangeData = [string, number, number];
+
+const rawPlan: RangeData[][] = [
+  // ── Old Testament: Days 1-216 ──
+  /* 001 */ [['gen', 1, 5]],
+  /* 002 */ [['gen', 6, 11]],
+  /* 003 */ [['gen', 12, 17]],
+  /* 004 */ [['gen', 18, 21]],
+  /* 005 */ [['gen', 22, 24]],
+  /* 006 */ [['psa', 1, 10]],
+  /* 007 */ [['gen', 25, 28]],
+  /* 008 */ [['gen', 29, 31]],
+  /* 009 */ [['gen', 32, 36]],
+  /* 010 */ [['gen', 37, 41]],
+  /* 011 */ [['gen', 42, 45]],
+  /* 012 */ [['gen', 46, 50]],
+  /* 013 */ [['exo', 1, 4]],
+  /* 014 */ [['exo', 5, 8]],
+  /* 015 */ [['exo', 9, 11]],
+  /* 016 */ [['exo', 12, 15]],
+  /* 017 */ [['exo', 16, 19]],
+  /* 018 */ [['psa', 11, 20]],
+  /* 019 */ [['exo', 20, 23]],
+  /* 020 */ [['exo', 24, 27]],
+  /* 021 */ [['exo', 28, 31]],
+  /* 022 */ [['exo', 32, 35]],
+  /* 023 */ [['exo', 36, 40]],
+  /* 024 */ [['psa', 21, 30]],
+  /* 025 */ [['lev', 1, 6]],
+  /* 026 */ [['lev', 7, 10]],
+  /* 027 */ [['lev', 11, 13]],
+  /* 028 */ [['lev', 14, 16]],
+  /* 029 */ [['lev', 17, 20]],
+  /* 030 */ [['psa', 31, 38]],
+  /* 031 */ [['lev', 21, 24]],
+  /* 032 */ [['lev', 25, 27]],
+  /* 033 */ [['num', 1, 4]],
+  /* 034 */ [['num', 5, 8]],
+  /* 035 */ [['num', 9, 12]],
+  /* 036 */ [['psa', 39, 41]],
+  /* 037 */ [['num', 13, 15]],
+  /* 038 */ [['num', 16, 19]],
+  /* 039 */ [['num', 20, 23]],
+  /* 040 */ [['num', 24, 27]],
+  /* 041 */ [['num', 28, 31]],
+  /* 042 */ [['psa', 42, 49]],
+  /* 043 */ [['num', 32, 36]],
+  /* 044 */ [['deu', 1, 3]],
+  /* 045 */ [['deu', 4, 7]],
+  /* 046 */ [['deu', 8, 11]],
+  /* 047 */ [['deu', 12, 15]],
+  /* 048 */ [['psa', 50, 58]],
+  /* 049 */ [['deu', 16, 20]],
+  /* 050 */ [['deu', 21, 24]],
+  /* 051 */ [['deu', 25, 28]],
+  /* 052 */ [['deu', 29, 31]],
+  /* 053 */ [['deu', 32, 34]],
+  /* 054 */ [['psa', 59, 67]],
+  /* 055 */ [['jos', 1, 4]],
+  /* 056 */ [['jos', 5, 8]],
+  /* 057 */ [['jos', 9, 12]],
+  /* 058 */ [['jos', 13, 17]],
+  /* 059 */ [['jos', 18, 21]],
+  /* 060 */ [['jos', 22, 24]],
+  /* 061 */ [['jdg', 1, 5]],
+  /* 062 */ [['jdg', 6, 9]],
+  /* 063 */ [['jdg', 10, 16]],
+  /* 064 */ [['jdg', 17, 21]],
+  /* 065 */ [['rut', 1, 4]],
+  /* 066 */ [['psa', 68, 72]],
+  /* 067 */ [['1sa', 1, 3]],
+  /* 068 */ [['1sa', 4, 8]],
+  /* 069 */ [['1sa', 9, 12]],
+  /* 070 */ [['1sa', 13, 15]],
+  /* 071 */ [['1sa', 16, 18]],
+  /* 072 */ [['psa', 73, 78]],
+  /* 073 */ [['1sa', 19, 22]],
+  /* 074 */ [['1sa', 23, 25]],
+  /* 075 */ [['1sa', 26, 31]],
+  /* 076 */ [['2sa', 1, 3]],
+  /* 077 */ [['2sa', 4, 8]],
+  /* 078 */ [['psa', 79, 89]],
+  /* 079 */ [['2sa', 9, 12]],
+  /* 080 */ [['2sa', 13, 15]],
+  /* 081 */ [['2sa', 16, 18]],
+  /* 082 */ [['2sa', 19, 21]],
+  /* 083 */ [['2sa', 22, 24]],
+  /* 084 */ [['psa', 90, 101]],
+  /* 085 */ [['1ki', 1, 2]],
+  /* 086 */ [['1ki', 3, 6]],
+  /* 087 */ [['1ki', 7, 8]],
+  /* 088 */ [['1ki', 9, 11]],
+  /* 089 */ [['1ki', 12, 14]],
+  /* 090 */ [['psa', 102, 106]],
+  /* 091 */ [['1ki', 15, 17]],
+  /* 092 */ [['1ki', 18, 20]],
+  /* 093 */ [['1ki', 21, 22]],
+  /* 094 */ [['2ki', 1, 3]],
+  /* 095 */ [['2ki', 4, 6]],
+  /* 096 */ [['psa', 107, 118]],
+  /* 097 */ [['2ki', 7, 9]],
+  /* 098 */ [['2ki', 10, 13]],
+  /* 099 */ [['2ki', 14, 17]],
+  /* 100 */ [['2ki', 18, 20]],
+  /* 101 */ [['2ki', 21, 25]],
+  /* 102 */ [['psa', 119, 119]],
+  /* 103 */ [['1ch', 1, 4]],
+  /* 104 */ [['1ch', 5, 9]],
+  /* 105 */ [['1ch', 10, 14]],
+  /* 106 */ [['1ch', 15, 19]],
+  /* 107 */ [['1ch', 20, 24]],
+  /* 108 */ [['psa', 120, 137]],
+  /* 109 */ [['1ch', 25, 29]],
+  /* 110 */ [['2ch', 1, 4]],
+  /* 111 */ [['2ch', 5, 8]],
+  /* 112 */ [['2ch', 9, 12]],
+  /* 113 */ [['2ch', 13, 16]],
+  /* 114 */ [['psa', 138, 150]],
+  /* 115 */ [['2ch', 17, 20]],
+  /* 116 */ [['2ch', 21, 24]],
+  /* 117 */ [['2ch', 25, 28]],
+  /* 118 */ [['2ch', 29, 32]],
+  /* 119 */ [['2ch', 33, 36]],
+  /* 120 */ [['pro', 1, 4]],
+  /* 121 */ [['ezr', 1, 4]],
+  /* 122 */ [['ezr', 5, 7]],
+  /* 123 */ [['ezr', 8, 10]],
+  /* 124 */ [['neh', 1, 4]],
+  /* 125 */ [['neh', 5, 7]],
+  /* 126 */ [['pro', 5, 8]],
+  /* 127 */ [['neh', 8, 10]],
+  /* 128 */ [['neh', 11, 13]],
+  /* 129 */ [['est', 1, 5]],
+  /* 130 */ [['est', 6, 10]],
+  /* 131 */ [['job', 1, 5]],
+  /* 132 */ [['pro', 9, 13]],
+  /* 133 */ [['job', 6, 10]],
+  /* 134 */ [['job', 11, 15]],
+  /* 135 */ [['job', 16, 21]],
+  /* 136 */ [['job', 22, 28]],
+  /* 137 */ [['job', 29, 31]],
+  /* 138 */ [['pro', 14, 17]],
+  /* 139 */ [['job', 32, 37]],
+  /* 140 */ [['job', 38, 42]],
+  /* 141 */ [['ecc', 1, 6]],
+  /* 142 */ [['ecc', 7, 12]],
+  /* 143 */ [['sng', 1, 8]],
+  /* 144 */ [['pro', 18, 22]],
+  /* 145 */ [['isa', 1, 5]],
+  /* 146 */ [['isa', 6, 10]],
+  /* 147 */ [['isa', 11, 16]],
+  /* 148 */ [['isa', 17, 22]],
+  /* 149 */ [['isa', 23, 27]],
+  /* 150 */ [['pro', 23, 26]],
+  /* 151 */ [['isa', 28, 30]],
+  /* 152 */ [['isa', 31, 35]],
+  /* 153 */ [['isa', 36, 39]],
+  /* 154 */ [['isa', 40, 42]],
+  /* 155 */ [['isa', 43, 45]],
+  /* 156 */ [['pro', 27, 31]],
+  /* 157 */ [['isa', 46, 49]],
+  /* 158 */ [['isa', 50, 53]],
+  /* 159 */ [['isa', 54, 58]],
+  /* 160 */ [['isa', 59, 62]],
+  /* 161 */ [['isa', 63, 66]],
+  /* 162 */ [['psa', 1, 10]],
+  /* 163 */ [['jer', 1, 3]],
+  /* 164 */ [['jer', 4, 6]],
+  /* 165 */ [['jer', 7, 9]],
+  /* 166 */ [['jer', 10, 13]],
+  /* 167 */ [['jer', 14, 17]],
+  /* 168 */ [['psa', 11, 20]],
+  /* 169 */ [['jer', 18, 20]],
+  /* 170 */ [['jer', 21, 24]],
+  /* 171 */ [['jer', 25, 28]],
+  /* 172 */ [['jer', 29, 31]],
+  /* 173 */ [['jer', 32, 34]],
+  /* 174 */ [['psa', 21, 30]],
+  /* 175 */ [['jer', 35, 38]],
+  /* 176 */ [['jer', 39, 43]],
+  /* 177 */ [['jer', 44, 47]],
+  /* 178 */ [['jer', 48, 50]],
+  /* 179 */ [['jer', 51, 52]],
+  /* 180 */ [['psa', 31, 36]],
+  /* 181 */ [['lam', 1, 5]],
+  /* 182 */ [['ezk', 1, 6]],
+  /* 183 */ [['ezk', 7, 11]],
+  /* 184 */ [['ezk', 12, 16]],
+  /* 185 */ [['ezk', 17, 20]],
+  /* 186 */ [['psa', 37, 41]],
+  /* 187 */ [['ezk', 21, 24]],
+  /* 188 */ [['ezk', 25, 28]],
+  /* 189 */ [['ezk', 29, 32]],
+  /* 190 */ [['ezk', 33, 36]],
+  /* 191 */ [['ezk', 37, 40]],
+  /* 192 */ [['psa', 42, 49]],
+  /* 193 */ [['ezk', 41, 44]],
+  /* 194 */ [['ezk', 45, 48]],
+  /* 195 */ [['dan', 1, 4]],
+  /* 196 */ [['dan', 5, 8]],
+  /* 197 */ [['dan', 9, 12]],
+  /* 198 */ [['psa', 50, 58]],
+  /* 199 */ [['hos', 1, 6]],
+  /* 200 */ [['hos', 7, 14]],
+  /* 201 */ [['jol', 1, 3]],
+  /* 202 */ [['amo', 1, 5]],
+  /* 203 */ [['amo', 6, 9]],
+  /* 204 */ [['psa', 59, 67]],
+  /* 205 */ [['oba', 1, 1], ['jon', 1, 4]],
+  /* 206 */ [['mic', 1, 7]],
+  /* 207 */ [['nah', 1, 3]],
+  /* 208 */ [['hab', 1, 3]],
+  /* 209 */ [['zep', 1, 3]],
+  /* 210 */ [['psa', 68, 72]],
+  /* 211 */ [['hag', 1, 2]],
+  /* 212 */ [['zec', 1, 6]],
+  /* 213 */ [['zec', 7, 10]],
+  /* 214 */ [['zec', 11, 14]],
+  /* 215 */ [['mal', 1, 4]],
+  /* 216 */ [], // 구약총정리 (OT review day)
+
+  // ── New Testament: Days 217-288 ──
+  /* 217 */ [['mat', 1, 4]],
+  /* 218 */ [['mat', 5, 7]],
+  /* 219 */ [['mat', 8, 10]],
+  /* 220 */ [['mat', 11, 14]],
+  /* 221 */ [['mat', 15, 18]],
+  /* 222 */ [['mat', 19, 22]],
+  /* 223 */ [['mat', 23, 25]],
+  /* 224 */ [['mat', 26, 28]],
+  /* 225 */ [['mrk', 1, 4]],
+  /* 226 */ [['mrk', 5, 7]],
+  /* 227 */ [['mrk', 8, 10]],
+  /* 228 */ [['mrk', 11, 13]],
+  /* 229 */ [['mrk', 14, 16]],
+  /* 230 */ [['luk', 1, 2]],
+  /* 231 */ [['luk', 3, 5]],
+  /* 232 */ [['luk', 6, 8]],
+  /* 233 */ [['luk', 9, 11]],
+  /* 234 */ [['luk', 12, 14]],
+  /* 235 */ [['luk', 15, 18]],
+  /* 236 */ [['luk', 19, 21]],
+  /* 237 */ [['luk', 22, 24]],
+  /* 238 */ [['jhn', 1, 4]],
+  /* 239 */ [['jhn', 5, 7]],
+  /* 240 */ [['jhn', 8, 10]],
+  /* 241 */ [['jhn', 11, 13]],
+  /* 242 */ [['jhn', 14, 17]],
+  /* 243 */ [['jhn', 18, 21]],
+  /* 244 */ [['act', 1, 4]],
+  /* 245 */ [['act', 5, 8]],
+  /* 246 */ [['act', 9, 11]],
+  /* 247 */ [['act', 12, 14]],
+  /* 248 */ [['act', 15, 17]],
+  /* 249 */ [['act', 18, 20]],
+  /* 250 */ [['act', 21, 24]],
+  /* 251 */ [['act', 25, 28]],
+  /* 252 */ [['rom', 1, 4]],
+  /* 253 */ [['rom', 5, 8]],
+  /* 254 */ [['rom', 9, 12]],
+  /* 255 */ [['rom', 13, 16]],
+  /* 256 */ [['1co', 1, 4]],
+  /* 257 */ [['1co', 5, 8]],
+  /* 258 */ [['1co', 9, 11]],
+  /* 259 */ [['1co', 12, 14]],
+  /* 260 */ [['1co', 15, 16]],
+  /* 261 */ [['2co', 1, 4]],
+  /* 262 */ [['2co', 5, 9]],
+  /* 263 */ [['2co', 10, 13]],
+  /* 264 */ [['gal', 1, 6]],
+  /* 265 */ [['eph', 1, 6]],
+  /* 266 */ [['php', 1, 4]],
+  /* 267 */ [['col', 1, 4]],
+  /* 268 */ [['1th', 1, 5]],
+  /* 269 */ [['2th', 1, 3]],
+  /* 270 */ [['1ti', 1, 6]],
+  /* 271 */ [['2ti', 1, 4]],
+  /* 272 */ [['tit', 1, 3]],
+  /* 273 */ [['phm', 1, 1]],
+  /* 274 */ [['heb', 1, 6]],
+  /* 275 */ [['heb', 7, 10]],
+  /* 276 */ [['heb', 11, 13]],
+  /* 277 */ [['jas', 1, 5]],
+  /* 278 */ [['1pe', 1, 5]],
+  /* 279 */ [['2pe', 1, 3]],
+  /* 280 */ [['1jn', 1, 5]],
+  /* 281 */ [['2jn', 1, 1], ['3jn', 1, 1]],
+  /* 282 */ [['jud', 1, 1]],
+  /* 283 */ [['rev', 1, 3]],
+  /* 284 */ [['rev', 4, 9]],
+  /* 285 */ [['rev', 10, 13]],
+  /* 286 */ [['rev', 14, 18]],
+  /* 287 */ [['rev', 19, 22]],
+  /* 288 */ [], // 신약마무리 (NT review day)
+];
+
+// ─── Build the plan from compact data ───────────────────────────────
+
+function buildPlan(): DayPlan[] {
+  return rawPlan.map((tuples, idx) => {
+    const dayNumber = idx + 1;
+    const ranges: ReadingRange[] = tuples.map(([bookCode, start, end]) => ({
+      bookCode,
+      startChapter: start,
+      endChapter: end,
+    }));
+
+    let label: string;
+    if (dayNumber === 216) {
+      label = '구약총정리';
+    } else if (dayNumber === 288) {
+      label = '신약마무리';
+    } else {
+      label = buildLabel(ranges);
+    }
+
+    return { dayNumber, ranges, label };
+  });
+}
+
+// ─── Cached plan & accessor ─────────────────────────────────────────
+
+/** The complete 288-day reading plan (hardcoded to match 동행300일 성경통독). */
+export const readingPlan: DayPlan[] = buildPlan();
 
 /** Look up a single day's plan by its 1-based day number. */
 export function getDayPlan(dayNumber: number): DayPlan | undefined {

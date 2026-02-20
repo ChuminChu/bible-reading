@@ -70,7 +70,7 @@ export default function HomePage() {
       <div className="bg-primary-500 text-white px-5 pt-8 pb-6 rounded-b-3xl">
         <h1 className="text-lg font-bold flex items-center gap-2">
           <Sprout size={20} />
-          동행300일 성경통독
+          충교 청년초원 300일 성경통독
         </h1>
       </div>
 
@@ -134,11 +134,18 @@ export default function HomePage() {
               <h2 className="text-lg font-bold text-text-primary">오늘의 통독 완료!</h2>
             </div>
             <p className="text-sm text-text-secondary mb-1">{readingLabel}</p>
-            <p className="text-xs text-text-muted">Day {dayNumber} 완료</p>
+            <p className="text-xs text-text-muted mb-4">Day {dayNumber} 완료</p>
+            <button
+              onClick={() => navigate(`/read/${dayNumber}`)}
+              className="w-full flex items-center justify-center gap-2 py-3 border border-primary-300 text-primary-600 rounded-xl font-semibold hover:bg-primary-50 transition-colors text-sm"
+            >
+              <BookOpen size={18} />
+              다시 읽기
+            </button>
           </div>
         ) : plan && dayNumber ? (
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <h2 className="text-lg font-bold text-text-primary mb-2">300일 성경1독</h2>
+            <h2 className="text-lg font-bold text-text-primary mb-2">오늘의 통독</h2>
             <p className="text-sm text-text-secondary mb-1">{readingLabel}</p>
             <p className="text-sm text-text-secondary mb-4">역본 : 개역개정</p>
 

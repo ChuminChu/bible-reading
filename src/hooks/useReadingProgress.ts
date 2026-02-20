@@ -68,6 +68,30 @@ export function useReadingProgress() {
     [user, progress],
   );
 
+  const markDayComplete = useCallback(
+    async (dayNumber: number, completed: boolean) => {
+      if (!user) return;
+
+      // Optimistic update
+      setProgress((prev) => {
+        const next = new Map(prev);
+        next.set(dayNumber, {
+          dayNumber,
+          completed,
+          completedAt: completed ? new Date().toISOString() : null,
+        });
+        return next;
+      });
+
+      try {
+        await progressService.toggleDayComplete(user.id, dayNumber, completed);
+      } catch (err) {
+        console.error('Failed to mark day:', err);
+      }
+    },
+    [user],
+  );
+
   const completedCount = Array.from(progress.values()).filter((p) => p.completed).length;
   const overallProgress = Math.round((completedCount / TOTAL_READING_DAYS) * 100);
 
@@ -80,6 +104,7 @@ export function useReadingProgress() {
     progress,
     loading,
     toggleDay,
+    markDayComplete,
     completedCount,
     overallProgress,
     isDayCompleted,

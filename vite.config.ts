@@ -10,11 +10,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        clientsClaim: true,
+        skipWaiting: true,
+      },
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: '동행300일 성경통독',
-        short_name: '동행300일',
-        description: '300일 성경통독 계획',
+        name: '충교 청년초원 300일 성경통독',
+        short_name: '청년초원 통독',
+        description: '충교 청년초원 300일 성경통독',
         theme_color: '#4A7C59',
         background_color: '#FAFAF5',
         display: 'standalone',

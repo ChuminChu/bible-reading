@@ -24,7 +24,6 @@ export default function GroupProgress() {
   if (members.length === 0) return null;
 
   const todayCompletedCount = members.filter((m) => m.todayCompleted).length;
-  const todayReadingCount = members.filter((m) => !m.todayCompleted).length;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5">
@@ -40,7 +39,6 @@ export default function GroupProgress() {
         <div className="bg-primary-50 rounded-xl px-4 py-2.5 mb-3 text-center">
           <p className="text-sm text-primary-700 font-medium">
             오늘 {todayCompletedCount}명 통독완료
-            {todayReadingCount > 0 && `, ${todayReadingCount}명 읽는 중`}
           </p>
         </div>
       )}

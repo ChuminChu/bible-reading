@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useBibleText } from '@/hooks/useBibleText';
 import { useBibleVersion } from '@/contexts/BibleVersionContext';
 import { getBookByCode } from '@/data/bibleBooks';
@@ -8,6 +9,7 @@ interface BibleReaderProps {
   bookCode: string;
   chapter: number;
   fontSize?: number;
+  startVerse?: number;
   onChapterChange?: (chapter: number) => void;
 }
 
@@ -15,6 +17,7 @@ export default function BibleReader({
   bookCode,
   chapter,
   fontSize = 18,
+  startVerse,
   onChapterChange,
 }: BibleReaderProps) {
   const { data, loading, error } = useBibleText(bookCode, chapter);
@@ -40,6 +43,17 @@ export default function BibleReader({
     ([a], [b]) => Number(a) - Number(b),
   );
 
+  const verseRef = useRef<HTMLParagraphElement>(null);
+
+  // Scroll to startVerse when data loads
+  useEffect(() => {
+    if (startVerse && startVerse > 1 && !loading && data) {
+      setTimeout(() => {
+        verseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [startVerse, loading, data]);
+
   const canGoPrev = chapter > 1;
   const canGoNext = book ? chapter < book.chapters : false;
 
@@ -62,7 +76,11 @@ export default function BibleReader({
       {/* Verses */}
       <div className="space-y-2 mt-2" style={{ fontSize: `${fontSize}px` }}>
         {verses.map(([num, text]) => (
-          <p key={num} className="leading-relaxed">
+          <p
+            key={num}
+            ref={startVerse && Number(num) === startVerse ? verseRef : undefined}
+            className="leading-relaxed"
+          >
             <sup className="text-xs text-primary-400 font-medium mr-1">{num}</sup>
             <span className="text-text-primary">{text}</span>
           </p>
