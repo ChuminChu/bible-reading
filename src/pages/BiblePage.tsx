@@ -100,12 +100,10 @@ export default function BiblePage() {
 
   const handleVerseSelect = useCallback((v: number) => {
     setSelectedVerse(v);
-  }, []);
-
-  const handleGo = () => {
     setViewMode('reading');
     navigate(`/bible/${selectedBookCode}/${selectedChapter}`, { replace: true });
-  };
+  }, [selectedBookCode, selectedChapter, navigate]);
+
 
   const handleBack = () => {
     setViewMode('picker');
@@ -251,15 +249,6 @@ export default function BiblePage() {
         </div>
       </div>
 
-      {/* Bottom selection bar */}
-      <div className="border-t border-gray-200 bg-white px-4 py-3 pb-safe">
-        <button
-          onClick={handleGo}
-          className="w-full py-3 bg-primary-500 text-white rounded-xl font-semibold hover:bg-primary-600 transition-colors text-sm"
-        >
-          {selectedBook?.name} {selectedChapter}장 {selectedVerse}절 읽기
-        </button>
-      </div>
     </div>
   );
 }
