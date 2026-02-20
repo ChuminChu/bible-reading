@@ -23,6 +23,16 @@ export default function BibleReader({
   const { data, loading, error } = useBibleText(bookCode, chapter);
   const { version, setVersion, versionName } = useBibleVersion();
   const book = getBookByCode(bookCode);
+  const verseRef = useRef<HTMLParagraphElement>(null);
+
+  // Scroll to startVerse when data loads
+  useEffect(() => {
+    if (startVerse && startVerse > 1 && !loading && data) {
+      setTimeout(() => {
+        verseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [startVerse, loading, data]);
 
   if (loading) return <LoadingSpinner message="말씀을 불러오는 중..." />;
 
@@ -42,17 +52,6 @@ export default function BibleReader({
   const verses = Object.entries(data.verses).sort(
     ([a], [b]) => Number(a) - Number(b),
   );
-
-  const verseRef = useRef<HTMLParagraphElement>(null);
-
-  // Scroll to startVerse when data loads
-  useEffect(() => {
-    if (startVerse && startVerse > 1 && !loading && data) {
-      setTimeout(() => {
-        verseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
-    }
-  }, [startVerse, loading, data]);
 
   const canGoPrev = chapter > 1;
   const canGoNext = book ? chapter < book.chapters : false;
