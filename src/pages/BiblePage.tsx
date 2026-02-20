@@ -149,7 +149,7 @@ export default function BiblePage() {
   bibleBooks.forEach((b) => bookMap.set(b.code, b));
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)]">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Header */}
       <div className="px-4 pt-4 pb-2">
         <h1 className="text-xl font-bold text-text-primary">성경</h1>
