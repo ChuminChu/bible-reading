@@ -42,7 +42,6 @@ export default function App() {
         <Route index element={<HomePage />} />
         <Route path="plan" element={<PlanPage />} />
         <Route path="bible" element={<BiblePage />} />
-        <Route path="bible/:bookCode/:chapter" element={<BiblePage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="admin" element={<AdminPage />} />
       </Route>

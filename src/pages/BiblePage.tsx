@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
 import { bibleBooks, getBookByCode } from '@/data/bibleBooks';
 import BibleReader from '@/components/BibleReader';
 import { ChevronLeft } from 'lucide-react';
@@ -45,17 +44,10 @@ const categories: BookCategory[] = [
 type ViewMode = 'picker' | 'reading';
 
 export default function BiblePage() {
-  const { bookCode: paramBook, chapter: paramChapter } = useParams();
-  const navigate = useNavigate();
-
-  const [selectedBookCode, setSelectedBookCode] = useState<string>(paramBook || 'gen');
-  const [selectedChapter, setSelectedChapter] = useState<number>(
-    paramChapter ? Number(paramChapter) : 1,
-  );
+  const [selectedBookCode, setSelectedBookCode] = useState<string>('gen');
+  const [selectedChapter, setSelectedChapter] = useState<number>(1);
   const [selectedVerse, setSelectedVerse] = useState<number>(1);
-  const [viewMode, setViewMode] = useState<ViewMode>(
-    paramBook && paramChapter ? 'reading' : 'picker',
-  );
+  const [viewMode, setViewMode] = useState<ViewMode>('picker');
 
   const bookListRef = useRef<HTMLDivElement>(null);
   const chapterListRef = useRef<HTMLDivElement>(null);
@@ -101,18 +93,15 @@ export default function BiblePage() {
   const handleVerseSelect = useCallback((v: number) => {
     setSelectedVerse(v);
     setViewMode('reading');
-    navigate(`/bible/${selectedBookCode}/${selectedChapter}`, { replace: true });
-  }, [selectedBookCode, selectedChapter, navigate]);
+  }, []);
 
 
   const handleBack = () => {
     setViewMode('picker');
-    navigate('/bible', { replace: true });
   };
 
   const handleChapterChange = (chapter: number) => {
     setSelectedChapter(chapter);
-    navigate(`/bible/${selectedBookCode}/${chapter}`, { replace: true });
     window.scrollTo(0, 0);
   };
 
