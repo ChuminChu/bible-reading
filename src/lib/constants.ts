@@ -1,4 +1,4 @@
-export const START_DATE = new Date(2026, 1, 3); // 2026-02-03 (months are 0-indexed)
+export const START_DATE = new Date(2026, 1, 2); // 2026-02-02 Monday (months are 0-indexed)
 export const TOTAL_READING_DAYS = 288;
 export const OT_DAYS = 216;
 export const NT_DAYS = 72;
