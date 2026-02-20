@@ -1,35 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBibleVersion } from '@/contexts/BibleVersionContext';
 import * as progressService from '@/services/progressService';
-import { BIBLE_VERSIONS, DEFAULT_FONT_SIZE } from '@/lib/constants';
-import { LogOut, Type, BookText, RotateCcw, User, Shield, ChevronRight } from 'lucide-react';
+import { BIBLE_VERSIONS } from '@/lib/constants';
+import { LogOut, BookText, RotateCcw, User, Shield, ChevronRight } from 'lucide-react';
 import type { BibleVersion } from '@/types/bible';
 
 export default function SettingsPage() {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const { version, setVersion } = useBibleVersion();
-  const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    progressService.getUserPreferences(user.id).then((prefs) => {
-      if (prefs) {
-        setFontSize(prefs.fontSize);
-      }
-    });
-  }, [user]);
-
-  const handleFontSizeChange = async (newSize: number) => {
-    setFontSize(newSize);
-    if (user) {
-      await progressService.updateUserPreferences(user.id, { fontSize: newSize });
-    }
-  };
 
   const handleVersionChange = async (newVersion: BibleVersion) => {
     setVersion(newVersion);
@@ -96,30 +79,6 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Font Size */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
-        <div className="flex items-center gap-3 mb-3">
-          <Type size={18} className="text-primary-500" />
-          <span className="text-sm font-medium text-text-primary">글꼴 크기</span>
-          <span className="text-xs text-text-muted ml-auto">{fontSize}px</span>
-        </div>
-        <input
-          type="range"
-          min={14}
-          max={28}
-          value={fontSize}
-          onChange={(e) => handleFontSizeChange(Number(e.target.value))}
-          className="w-full accent-primary-500"
-        />
-        <div className="flex justify-between mt-1">
-          <span className="text-xs text-text-muted">작게</span>
-          <span className="text-xs text-text-muted">크게</span>
-        </div>
-        <p className="mt-3 text-text-primary" style={{ fontSize: `${fontSize}px` }}>
-          태초에 하나님이 천지를 창조하시니라
-        </p>
       </div>
 
       {/* Admin link (admin only) */}
