@@ -5,10 +5,13 @@ import { getAllMemberProgress } from '@/services/communityService';
 import type { MemberProgress } from '@/services/communityService';
 import { Users, Check } from 'lucide-react';
 
+const INITIAL_SHOW = 5;
+
 export default function GroupProgress() {
   const { user } = useAuth();
   const [members, setMembers] = useState<MemberProgress[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   const todayDayNumber = getDayNumber(new Date());
 
@@ -47,6 +50,7 @@ export default function GroupProgress() {
       <div className="space-y-2">
         {members
           .sort((a, b) => b.completedDays - a.completedDays)
+          .slice(0, expanded ? undefined : INITIAL_SHOW)
           .map((member) => (
             <div
               key={member.userId}
@@ -80,6 +84,16 @@ export default function GroupProgress() {
             </div>
           ))}
       </div>
+
+      {/* 더보기/접기 버튼 */}
+      {members.length > INITIAL_SHOW && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full mt-3 pt-3 border-t border-gray-100 text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors"
+        >
+          {expanded ? '접기' : `더보기 (${members.length - INITIAL_SHOW}명)`}
+        </button>
+      )}
     </div>
   );
 }
