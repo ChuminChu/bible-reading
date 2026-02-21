@@ -41,7 +41,7 @@ export default function GroupProgress() {
       </div>
 
       {/* 가로 스크롤 멤버 리스트 */}
-      <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+      <div className="flex gap-3 overflow-x-auto pb-2 pt-1 -mx-5 px-5 scrollbar-hide">
         {sorted.map((member) => (
           <div
             key={member.userId}
