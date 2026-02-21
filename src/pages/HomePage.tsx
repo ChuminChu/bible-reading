@@ -108,8 +108,13 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Today's reading card */}
+      {/* Group Progress */}
       <div className="px-4 mt-4">
+        <GroupProgress />
+      </div>
+
+      {/* Today's reading card */}
+      <div className="px-4 mt-4 mb-6">
         {isSunday ? (
           <div className="bg-accent-50 rounded-2xl border border-accent-200 p-6 text-center">
             <Sprout size={36} className="text-accent-500 mx-auto mb-3" />
@@ -167,10 +172,6 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Group Progress */}
-      <div className="px-4 mt-4 mb-6">
-        <GroupProgress />
-      </div>
     </div>
   );
 }

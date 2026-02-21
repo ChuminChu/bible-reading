@@ -5,13 +5,10 @@ import { getAllMemberProgress } from '@/services/communityService';
 import type { MemberProgress } from '@/services/communityService';
 import { Users, Check } from 'lucide-react';
 
-const INITIAL_SHOW = 5;
-
 export default function GroupProgress() {
   const { user } = useAuth();
   const [members, setMembers] = useState<MemberProgress[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
 
   const todayDayNumber = getDayNumber(new Date());
 
@@ -26,6 +23,7 @@ export default function GroupProgress() {
   if (loading) return null;
   if (members.length === 0) return null;
 
+  const sorted = [...members].sort((a, b) => b.completedDays - a.completedDays);
   const todayCompletedCount = members.filter((m) => m.todayCompleted).length;
 
   return (
@@ -35,65 +33,48 @@ export default function GroupProgress() {
         <Users size={18} className="text-primary-500" />
         <span className="text-sm font-semibold text-text-primary">통독 모임</span>
         <span className="text-xs text-text-muted">({members.length}명)</span>
+        {todayDayNumber && (
+          <span className="ml-auto text-xs font-medium text-primary-600">
+            오늘 {todayCompletedCount}명 완료
+          </span>
+        )}
       </div>
 
-      {/* 오늘 현황 */}
-      {todayDayNumber && (
-        <div className="bg-primary-50 rounded-xl px-4 py-2.5 mb-3 text-center">
-          <p className="text-sm text-primary-700 font-medium">
-            오늘 {todayCompletedCount}명 통독완료
-          </p>
-        </div>
-      )}
-
-      {/* 멤버 리스트 */}
-      <div className="space-y-2">
-        {members
-          .sort((a, b) => b.completedDays - a.completedDays)
-          .slice(0, expanded ? undefined : INITIAL_SHOW)
-          .map((member) => (
-            <div
-              key={member.userId}
-              className="flex items-center gap-3 py-1.5"
-            >
-              {/* 아바타 */}
+      {/* 가로 스크롤 멤버 리스트 */}
+      <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+        {sorted.map((member) => (
+          <div
+            key={member.userId}
+            className="flex flex-col items-center gap-1.5 flex-shrink-0 w-14"
+          >
+            {/* 아바타 */}
+            <div className="relative">
               <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
+                className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold ${
                   member.todayCompleted
-                    ? 'bg-primary-100 text-primary-600'
+                    ? 'bg-primary-100 text-primary-600 ring-2 ring-primary-400'
                     : 'bg-gray-100 text-text-muted'
                 }`}
               >
                 {member.displayName.charAt(0)}
               </div>
-
-              {/* 이름 + 진행률 */}
-              <div className="flex-1 min-w-0">
-                <span className="text-sm font-medium text-text-primary truncate block">
-                  {member.displayName}
-                </span>
-                <p className="text-xs text-text-muted">{member.completedDays}일 완료</p>
-              </div>
-
-              {/* 오늘 완료 체크 */}
               {member.todayCompleted && (
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center">
-                  <Check size={14} className="text-white" strokeWidth={3} />
+                <div className="absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-primary-500 flex items-center justify-center ring-2 ring-white">
+                  <Check size={10} className="text-white" strokeWidth={3} />
                 </div>
               )}
             </div>
-          ))}
-      </div>
 
-      {/* 더보기/접기 버튼 */}
-      {members.length > INITIAL_SHOW && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full mt-3 pt-3 border-t border-gray-100 text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors"
-        >
-          {expanded ? '접기' : `더보기 (${members.length - INITIAL_SHOW}명)`}
-        </button>
-      )}
+            {/* 이름 */}
+            <span className="text-[11px] font-medium text-text-primary truncate w-full text-center">
+              {member.displayName}
+            </span>
+            <span className="text-[10px] text-text-muted -mt-1">
+              {member.completedDays}일
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
