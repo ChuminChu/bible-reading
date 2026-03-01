@@ -8,6 +8,7 @@ import { getDayPlan } from '@/data/readingPlan';
 import { getBookByCode } from '@/data/bibleBooks';
 import { getDayNumber } from '@/lib/dayCalculation';
 import * as progressService from '@/services/progressService';
+import { supabase } from '@/services/supabase';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { ChevronLeft, ArrowLeftRight, Check } from 'lucide-react';
 import type { ReadingRange } from '@/types/plan';
@@ -51,10 +52,12 @@ export default function ReadingFlowPage() {
   const [checkedSet, setCheckedSet] = useState<Set<number>>(new Set());
   const [allDone, setAllDone] = useState(false);
 
+  const userId = user?.id;
+
   // Load chapter-level progress from Supabase
   useEffect(() => {
-    if (!user || !plan) return;
-    progressService.getChapterProgress(user.id).then((data) => {
+    if (!userId || !plan) return;
+    progressService.getChapterProgress(userId).then((data) => {
       const checked = new Set<number>();
       chapters.forEach((ch, idx) => {
         if (data.some((p) => p.bookCode === ch.bookCode && p.chapterNumber === ch.chapter && p.completed)) {
@@ -72,7 +75,7 @@ export default function ReadingFlowPage() {
       const firstUnchecked = chapters.findIndex((_, i) => !checked.has(i));
       if (firstUnchecked >= 0) setCurrentIdx(firstUnchecked);
     });
-  }, [user]);
+  }, [userId]);
 
   const current = chapters[currentIdx];
   const { data: bibleData, loading, error } = useBibleText(
@@ -81,21 +84,28 @@ export default function ReadingFlowPage() {
   );
 
   const handleCheck = useCallback(async () => {
-    if (!current || !user) return;
+    if (!current || !userId) return;
 
     // Mark chapter as completed
     const newChecked = new Set(checkedSet);
     newChecked.add(currentIdx);
     setCheckedSet(newChecked);
 
-    // Save chapter to DB in background (don't block next-chapter advance)
-    progressService.toggleChapterComplete(user.id, current.bookCode, current.chapter, true).catch(
-      (err) => console.error('Failed to save chapter progress:', err),
-    );
+    // Save chapter to DB in background with retry
+    const saveChapter = () =>
+      progressService.toggleChapterComplete(userId, current.bookCode, current.chapter, true);
+    saveChapter().catch(() => {
+      // Retry once after refreshing the session
+      supabase.auth.getSession().then(() => saveChapter()).catch(
+        (err) => console.error('Failed to save chapter progress:', err),
+      );
+    });
 
-    // All chapters done? → await DB save before showing completion
+    // All chapters done? → save day completion, but always advance UI
     if (newChecked.size === chapters.length) {
-      await markDayComplete(dayNumber, true);
+      markDayComplete(dayNumber, true).catch(
+        (err) => console.error('Failed to mark day complete:', err),
+      );
       setAllDone(true);
       return;
     }
@@ -106,10 +116,10 @@ export default function ReadingFlowPage() {
       setCurrentIdx(nextIdx);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [current, currentIdx, checkedSet, chapters, user, dayNumber, markDayComplete]);
+  }, [current, currentIdx, checkedSet, chapters, userId, dayNumber, markDayComplete]);
 
   const handleManualCheck = useCallback(async (idx: number) => {
-    if (!user) return;
+    if (!userId) return;
     const ch = chapters[idx];
     const isChecked = checkedSet.has(idx);
     const newChecked = new Set(checkedSet);
@@ -121,17 +131,23 @@ export default function ReadingFlowPage() {
     }
     setCheckedSet(newChecked);
 
-    // Save to DB in background
-    progressService.toggleChapterComplete(user.id, ch.bookCode, ch.chapter, !isChecked).catch(
-      (err) => console.error('Failed to save chapter progress:', err),
-    );
+    // Save to DB in background with retry
+    const save = () =>
+      progressService.toggleChapterComplete(userId, ch.bookCode, ch.chapter, !isChecked);
+    save().catch(() => {
+      supabase.auth.getSession().then(() => save()).catch(
+        (err) => console.error('Failed to save chapter progress:', err),
+      );
+    });
 
-    // Check if all done → await DB save
+    // Check if all done → always advance UI
     if (newChecked.size === chapters.length) {
-      await markDayComplete(dayNumber, true);
+      markDayComplete(dayNumber, true).catch(
+        (err) => console.error('Failed to mark day complete:', err),
+      );
       setAllDone(true);
     }
-  }, [checkedSet, chapters, user, dayNumber, markDayComplete]);
+  }, [checkedSet, chapters, userId, dayNumber, markDayComplete]);
 
   if (!plan) {
     return (
@@ -145,10 +161,10 @@ export default function ReadingFlowPage() {
   }
 
   const handleRestart = useCallback(async () => {
-    if (!user) return;
+    if (!userId) return;
     // Reset all chapter progress for this day's chapters
     for (const ch of chapters) {
-      await progressService.toggleChapterComplete(user.id, ch.bookCode, ch.chapter, false);
+      await progressService.toggleChapterComplete(userId, ch.bookCode, ch.chapter, false);
     }
     // Reset day completion
     await markDayComplete(dayNumber, false);
@@ -156,7 +172,7 @@ export default function ReadingFlowPage() {
     setCurrentIdx(0);
     setAllDone(false);
     window.scrollTo(0, 0);
-  }, [user, chapters, dayNumber]);
+  }, [userId, chapters, dayNumber]);
 
   // All done screen
   if (allDone) {
