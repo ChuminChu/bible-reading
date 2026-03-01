@@ -10,21 +10,19 @@ export interface MemberProgress {
 export async function getAllMemberProgress(
   todayDayNumber: number | null,
 ): Promise<MemberProgress[]> {
-  // 모든 프로필 조회
-  const { data: profiles, error: profErr } = await supabase
-    .from('profiles')
-    .select('id, display_name');
+  // 프로필과 진행률을 병렬로 조회
+  const [profilesResult, progressResult] = await Promise.all([
+    supabase.from('profiles').select('id, display_name'),
+    supabase.from('reading_progress').select('user_id, day_number').eq('completed', true),
+  ]);
 
-  if (profErr) throw profErr;
+  if (profilesResult.error) throw profilesResult.error;
+  if (progressResult.error) throw progressResult.error;
+
+  const profiles = profilesResult.data;
+  const allProgress = progressResult.data;
+
   if (!profiles || profiles.length === 0) return [];
-
-  // 모든 완료된 진행률 조회
-  const { data: allProgress, error: progErr } = await supabase
-    .from('reading_progress')
-    .select('user_id, day_number')
-    .eq('completed', true);
-
-  if (progErr) throw progErr;
 
   // 사용자별 진행률 집계
   const progressMap = new Map<string, { count: number; todayDone: boolean }>();

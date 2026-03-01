@@ -136,14 +136,14 @@ export default function BiblePage() {
   bibleBooks.forEach((b) => bookMap.set(b.code, b));
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col h-[calc(100dvh-5rem)] overflow-hidden">
       {/* Header */}
-      <div className="px-4 pt-4 pb-2">
+      <div className="px-4 pt-4 pb-2 shrink-0">
         <h1 className="text-xl font-bold text-text-primary">성경</h1>
       </div>
 
       {/* 3-column picker */}
-      <div className="flex flex-1 min-h-0 border-t border-gray-200">
+      <div className="flex flex-1 min-h-0 border-t border-gray-200 overflow-hidden">
         {/* Column 1: Books */}
         <div
           ref={bookListRef}

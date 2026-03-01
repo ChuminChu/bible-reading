@@ -49,15 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      setUser(data.user);
-      if (data.user) {
-        const p = await fetchProfile(data.user.id);
-        setProfile(p);
-      }
-      setLoading(false);
-    });
+    let initialDone = false;
 
+    // onAuthStateChange fires with the current session almost immediately
+    // (from local storage), so we rely on it as the primary auth source
+    // instead of waiting for getUser() which makes a network round-trip.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -67,9 +63,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
       }
+      if (!initialDone) {
+        initialDone = true;
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    // Fallback: if onAuthStateChange hasn't fired after 3s (e.g. no session),
+    // stop loading so the app doesn't hang forever.
+    const timeout = setTimeout(() => {
+      if (!initialDone) {
+        initialDone = true;
+        setLoading(false);
+      }
+    }, 3000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   async function signIn(email: string, password: string): Promise<AuthResult> {

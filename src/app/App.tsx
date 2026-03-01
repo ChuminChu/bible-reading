@@ -14,8 +14,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-surface">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-surface gap-4">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary-500 border-t-transparent" />
+        <p className="text-sm text-text-muted animate-pulse">불러오는 중...</p>
       </div>
     );
   }
