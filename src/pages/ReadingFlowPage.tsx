@@ -10,6 +10,16 @@ import { getDayNumber } from '@/lib/dayCalculation';
 import * as progressService from '@/services/progressService';
 import { supabase } from '@/services/supabase';
 import LoadingSpinner from '@/components/LoadingSpinner';
+
+/** Try fn; on failure refresh auth session and retry once. */
+async function withSessionRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    await supabase.auth.getSession();
+    return await fn();
+  }
+}
 import { ChevronLeft, ArrowLeftRight, Check } from 'lucide-react';
 import type { ReadingRange } from '@/types/plan';
 
@@ -91,21 +101,22 @@ export default function ReadingFlowPage() {
     newChecked.add(currentIdx);
     setCheckedSet(newChecked);
 
-    // Save chapter to DB in background with retry
-    const saveChapter = () =>
-      progressService.toggleChapterComplete(userId, current.bookCode, current.chapter, true);
-    saveChapter().catch(() => {
-      // Retry once after refreshing the session
-      supabase.auth.getSession().then(() => saveChapter()).catch(
-        (err) => console.error('Failed to save chapter progress:', err),
+    // Save chapter to DB with session retry
+    try {
+      await withSessionRetry(() =>
+        progressService.toggleChapterComplete(userId, current.bookCode, current.chapter, true),
       );
-    });
+    } catch (err) {
+      console.error('Failed to save chapter progress:', err);
+    }
 
-    // All chapters done? → save day completion, but always advance UI
+    // All chapters done? → save day completion, then show completion screen
     if (newChecked.size === chapters.length) {
-      markDayComplete(dayNumber, true).catch(
-        (err) => console.error('Failed to mark day complete:', err),
-      );
+      try {
+        await markDayComplete(dayNumber, true);
+      } catch (err) {
+        console.error('Failed to mark day complete:', err);
+      }
       setAllDone(true);
       return;
     }
@@ -131,20 +142,22 @@ export default function ReadingFlowPage() {
     }
     setCheckedSet(newChecked);
 
-    // Save to DB in background with retry
-    const save = () =>
-      progressService.toggleChapterComplete(userId, ch.bookCode, ch.chapter, !isChecked);
-    save().catch(() => {
-      supabase.auth.getSession().then(() => save()).catch(
-        (err) => console.error('Failed to save chapter progress:', err),
+    // Save to DB with session retry
+    try {
+      await withSessionRetry(() =>
+        progressService.toggleChapterComplete(userId, ch.bookCode, ch.chapter, !isChecked),
       );
-    });
+    } catch (err) {
+      console.error('Failed to save chapter progress:', err);
+    }
 
-    // Check if all done → always advance UI
+    // Check if all done
     if (newChecked.size === chapters.length) {
-      markDayComplete(dayNumber, true).catch(
-        (err) => console.error('Failed to mark day complete:', err),
-      );
+      try {
+        await markDayComplete(dayNumber, true);
+      } catch (err) {
+        console.error('Failed to mark day complete:', err);
+      }
       setAllDone(true);
     }
   }, [checkedSet, chapters, userId, dayNumber, markDayComplete]);

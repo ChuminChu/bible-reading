@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import Layout from './Layout';
 import HomePage from '@/pages/HomePage';
 import PlanPage from '@/pages/PlanPage';
@@ -8,8 +8,9 @@ import AdminPage from '@/pages/AdminPage';
 import ReadingFlowPage from '@/pages/ReadingFlowPage';
 import LoginPage from '@/pages/LoginPage';
 import { useAuth } from '@/contexts/AuthContext';
+import { ReadingProgressProvider } from '@/contexts/ReadingProgressContext';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function AuthGate() {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -25,35 +26,27 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <ReadingProgressProvider>
+      <Outlet />
+    </ReadingProgressProvider>
+  );
 }
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<HomePage />} />
-        <Route path="plan" element={<PlanPage />} />
-        <Route path="bible" element={<BiblePage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="admin" element={<AdminPage />} />
+      <Route element={<AuthGate />}>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<HomePage />} />
+          <Route path="plan" element={<PlanPage />} />
+          <Route path="bible" element={<BiblePage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="admin" element={<AdminPage />} />
+        </Route>
+        <Route path="/read/:dayNumber" element={<ReadingFlowPage />} />
       </Route>
-      <Route
-        path="/read/:dayNumber"
-        element={
-          <ProtectedRoute>
-            <ReadingFlowPage />
-          </ProtectedRoute>
-        }
-      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
