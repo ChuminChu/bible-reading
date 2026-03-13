@@ -52,7 +52,9 @@ export function ReadingProgressProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const load = async () => {
       try {
-        const data = await progressService.getReadingProgress(user.id);
+        const data = await withSessionRetry(() =>
+          progressService.getReadingProgress(user.id),
+        );
         if (cancelled) return;
         const map = new Map<number, ReadingProgress>();
         data.forEach((p) => map.set(p.dayNumber, p));

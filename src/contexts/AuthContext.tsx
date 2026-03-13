@@ -49,38 +49,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     let initialDone = false;
 
-    // onAuthStateChange fires with the current session almost immediately
-    // (from local storage), so we rely on it as the primary auth source
-    // instead of waiting for getUser() which makes a network round-trip.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    async function initSession() {
+      try {
+        // getUser() validates the token server-side and refreshes if expired.
+        // This is critical on cold start where the stored access token is stale.
+        const { data: { user: validatedUser } } = await supabase.auth.getUser();
+
+        if (!mounted || initialDone) return;
+        initialDone = true;
+
+        setUser(validatedUser);
+        if (validatedUser) {
+          const p = await fetchProfile(validatedUser.id);
+          if (mounted) setProfile(p);
+        }
+      } catch {
+        // No valid session — user needs to log in
+      } finally {
+        if (mounted && !initialDone) {
+          initialDone = true;
+        }
+        if (mounted) setLoading(false);
+      }
+    }
+
+    initSession();
+
+    // Listen for subsequent auth changes (sign-in, sign-out, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      // Skip INITIAL_SESSION — we already handled it via getUser() above
+      if (event === 'INITIAL_SESSION') return;
+
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
         const p = await fetchProfile(currentUser.id);
-        setProfile(p);
+        if (mounted) setProfile(p);
       } else {
         setProfile(null);
       }
-      if (!initialDone) {
-        initialDone = true;
-        setLoading(false);
-      }
     });
 
-    // Fallback: if onAuthStateChange hasn't fired after 3s (e.g. no session),
-    // stop loading so the app doesn't hang forever.
-    const timeout = setTimeout(() => {
-      if (!initialDone) {
-        initialDone = true;
-        setLoading(false);
-      }
-    }, 3000);
-
     return () => {
+      mounted = false;
       subscription.unsubscribe();
-      clearTimeout(timeout);
     };
   }, []);
 
