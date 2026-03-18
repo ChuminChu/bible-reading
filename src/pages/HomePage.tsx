@@ -49,7 +49,7 @@ const quotes = [
 export default function HomePage() {
   const navigate = useNavigate();
   const { dayNumber, plan, isSunday, isBeforeStart } = useTodayReading();
-  const { completedCount, overallProgress, isDayCompleted } = useReadingProgress();
+  const { completedCount, overallProgress, isDayCompleted, loading: progressLoading } = useReadingProgress();
 
   const todayCompleted = dayNumber ? isDayCompleted(dayNumber) : false;
 
@@ -85,14 +85,22 @@ export default function HomePage() {
             </div>
             <div className="w-px h-10 bg-gray-200" />
             <div>
-              <ProgressRing progress={overallProgress} size={56} strokeWidth={5}>
-                <span className="text-xs font-bold text-primary-600">{overallProgress}%</span>
-              </ProgressRing>
+              {progressLoading ? (
+                <div className="w-14 h-14 rounded-full border-4 border-gray-200 animate-pulse" />
+              ) : (
+                <ProgressRing progress={overallProgress} size={56} strokeWidth={5}>
+                  <span className="text-xs font-bold text-primary-600">{overallProgress}%</span>
+                </ProgressRing>
+              )}
             </div>
             <div className="w-px h-10 bg-gray-200" />
             <div>
               <p className="text-xs text-text-muted mb-1">완독</p>
-              <p className="text-2xl font-bold text-text-primary">{completedCount}</p>
+              {progressLoading ? (
+                <div className="h-8 w-8 mx-auto bg-gray-200 rounded animate-pulse" />
+              ) : (
+                <p className="text-2xl font-bold text-text-primary">{completedCount}</p>
+              )}
               <p className="text-[10px] text-text-muted">읽은 일수</p>
             </div>
           </div>
@@ -115,7 +123,14 @@ export default function HomePage() {
 
       {/* Today's reading card */}
       <div className="px-4 mt-4 mb-6">
-        {isSunday ? (
+        {progressLoading ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse">
+            <div className="h-5 w-28 bg-gray-200 rounded mb-3" />
+            <div className="h-4 w-40 bg-gray-200 rounded mb-2" />
+            <div className="h-4 w-32 bg-gray-200 rounded mb-4" />
+            <div className="h-12 bg-gray-200 rounded-xl" />
+          </div>
+        ) : isSunday ? (
           <div className="bg-accent-50 rounded-2xl border border-accent-200 p-6 text-center">
             <Sprout size={36} className="text-accent-500 mx-auto mb-3" />
             <h2 className="text-lg font-bold text-accent-700 mb-1">안식일</h2>

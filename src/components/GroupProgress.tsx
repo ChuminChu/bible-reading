@@ -3,24 +3,75 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getDayNumber } from '@/lib/dayCalculation';
 import { getAllMemberProgress } from '@/services/communityService';
 import type { MemberProgress } from '@/services/communityService';
+import { supabase } from '@/services/supabase';
 import { Users, Check } from 'lucide-react';
 
 export default function GroupProgress() {
   const { user } = useAuth();
   const [members, setMembers] = useState<MemberProgress[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const todayDayNumber = getDayNumber(new Date());
 
   useEffect(() => {
     if (!user) return;
-    getAllMemberProgress(todayDayNumber)
-      .then(setMembers)
-      .catch((err) => console.error('Failed to load progress:', err))
-      .finally(() => setLoading(false));
-  }, [user]);
+    setLoading(true);
+    setError(null);
 
-  if (loading) return null;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await getAllMemberProgress(todayDayNumber);
+        if (!cancelled) setMembers(data);
+      } catch (err) {
+        console.error('GroupProgress: first attempt failed:', err);
+        // Retry once after session refresh
+        try {
+          await supabase.auth.refreshSession();
+          const data = await getAllMemberProgress(todayDayNumber);
+          if (!cancelled) setMembers(data);
+        } catch (retryErr) {
+          console.error('GroupProgress: retry also failed:', retryErr);
+          if (!cancelled) {
+            setError(retryErr instanceof Error ? retryErr.message : '멤버 목록을 불러올 수 없습니다.');
+          }
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.id, todayDayNumber]);
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-[18px] h-[18px] bg-gray-200 rounded" />
+          <div className="h-4 w-16 bg-gray-200 rounded" />
+        </div>
+        <div className="flex gap-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex flex-col items-center gap-1.5 w-14">
+              <div className="w-11 h-11 rounded-full bg-gray-200" />
+              <div className="h-3 w-10 bg-gray-200 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <p className="text-sm text-red-500">{error}</p>
+      </div>
+    );
+  }
+
   if (members.length === 0) return null;
 
   const sorted = [...members].sort((a, b) => b.completedDays - a.completedDays);

@@ -16,7 +16,8 @@ async function withSessionRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch {
-    await supabase.auth.getSession();
+    // Actually refresh the auth token (getSession only reads cache)
+    await supabase.auth.refreshSession();
     return await fn();
   }
 }
@@ -63,6 +64,15 @@ export default function ReadingFlowPage() {
   const [allDone, setAllDone] = useState(false);
 
   const userId = user?.id;
+
+  // Keep auth session alive during long reading sessions (10-30+ min)
+  useEffect(() => {
+    const REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
+    const interval = setInterval(() => {
+      supabase.auth.refreshSession();
+    }, REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, []);
 
   // Load chapter-level progress from Supabase
   useEffect(() => {

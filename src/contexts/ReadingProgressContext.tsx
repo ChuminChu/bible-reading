@@ -26,13 +26,15 @@ const ReadingProgressContext = createContext<ReadingProgressContextValue | undef
 
 /**
  * Try an async operation; on failure refresh the Supabase session and retry once.
+ * Uses refreshSession() instead of getSession() because getSession() only reads
+ * from local cache and does NOT renew an expired access token.
  */
 async function withSessionRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch {
-    // Refresh auth token and retry
-    await supabase.auth.getSession();
+    // Actually refresh the auth token (getSession only reads cache)
+    await supabase.auth.refreshSession();
     return await fn();
   }
 }
@@ -48,6 +50,8 @@ export function ReadingProgressProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+
+    setLoading(true);
 
     let cancelled = false;
     const load = async () => {
@@ -67,7 +71,7 @@ export function ReadingProgressProvider({ children }: { children: ReactNode }) {
     };
     load();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user?.id]);
 
   const toggleDay = useCallback(
     async (dayNumber: number) => {
