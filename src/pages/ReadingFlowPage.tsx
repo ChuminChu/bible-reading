@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useBibleText } from '@/hooks/useBibleText';
 import { useBibleVersion } from '@/contexts/BibleVersionContext';
@@ -62,6 +62,7 @@ export default function ReadingFlowPage() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [checkedSet, setCheckedSet] = useState<Set<number>>(new Set());
   const [allDone, setAllDone] = useState(false);
+  const checkingRef = useRef(false);
 
   const userId = user?.id;
 
@@ -103,31 +104,27 @@ export default function ReadingFlowPage() {
     current?.chapter ?? 0,
   );
 
-  const handleCheck = useCallback(async () => {
-    if (!current || !userId) return;
+  const handleCheck = useCallback(() => {
+    if (!current || !userId || checkingRef.current) return;
+    checkingRef.current = true;
 
-    // Mark chapter as completed
+    // Compute new state synchronously from current closure
     const newChecked = new Set(checkedSet);
     newChecked.add(currentIdx);
     setCheckedSet(newChecked);
 
-    // Save chapter to DB with session retry
-    try {
-      await withSessionRetry(() =>
-        progressService.toggleChapterComplete(userId, current.bookCode, current.chapter, true),
-      );
-    } catch (err) {
-      console.error('Failed to save chapter progress:', err);
-    }
+    // Save chapter to DB in background (don't block UI)
+    withSessionRetry(() =>
+      progressService.toggleChapterComplete(userId, current.bookCode, current.chapter, true),
+    ).catch((err) => console.error('Failed to save chapter progress:', err));
 
     // All chapters done? → save day completion, then show completion screen
     if (newChecked.size === chapters.length) {
-      try {
-        await markDayComplete(dayNumber, true);
-      } catch (err) {
-        console.error('Failed to mark day complete:', err);
-      }
+      markDayComplete(dayNumber, true).catch((err) =>
+        console.error('Failed to mark day complete:', err),
+      );
       setAllDone(true);
+      setTimeout(() => { checkingRef.current = false; }, 300);
       return;
     }
 
@@ -137,9 +134,12 @@ export default function ReadingFlowPage() {
       setCurrentIdx(nextIdx);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+
+    // Brief cooldown to prevent rapid double-clicks (ensures re-render with fresh closure)
+    setTimeout(() => { checkingRef.current = false; }, 300);
   }, [current, currentIdx, checkedSet, chapters, userId, dayNumber, markDayComplete]);
 
-  const handleManualCheck = useCallback(async (idx: number) => {
+  const handleManualCheck = useCallback((idx: number) => {
     if (!userId) return;
     const ch = chapters[idx];
     const isChecked = checkedSet.has(idx);
@@ -152,22 +152,16 @@ export default function ReadingFlowPage() {
     }
     setCheckedSet(newChecked);
 
-    // Save to DB with session retry
-    try {
-      await withSessionRetry(() =>
-        progressService.toggleChapterComplete(userId, ch.bookCode, ch.chapter, !isChecked),
-      );
-    } catch (err) {
-      console.error('Failed to save chapter progress:', err);
-    }
+    // Save to DB in background
+    withSessionRetry(() =>
+      progressService.toggleChapterComplete(userId, ch.bookCode, ch.chapter, !isChecked),
+    ).catch((err) => console.error('Failed to save chapter progress:', err));
 
     // Check if all done
     if (newChecked.size === chapters.length) {
-      try {
-        await markDayComplete(dayNumber, true);
-      } catch (err) {
-        console.error('Failed to mark day complete:', err);
-      }
+      markDayComplete(dayNumber, true).catch((err) =>
+        console.error('Failed to mark day complete:', err),
+      );
       setAllDone(true);
     }
   }, [checkedSet, chapters, userId, dayNumber, markDayComplete]);
@@ -195,7 +189,7 @@ export default function ReadingFlowPage() {
     setCurrentIdx(0);
     setAllDone(false);
     window.scrollTo(0, 0);
-  }, [userId, chapters, dayNumber]);
+  }, [userId, chapters, dayNumber, markDayComplete]);
 
   // All done screen
   if (allDone) {
