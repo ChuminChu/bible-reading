@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getDayNumber } from '@/lib/dayCalculation';
 import { getAllMemberProgress } from '@/services/communityService';
 import type { MemberProgress } from '@/services/communityService';
-import { supabase } from '@/services/supabase';
 import { Users, Check } from 'lucide-react';
 
 export default function GroupProgress() {
@@ -26,9 +25,8 @@ export default function GroupProgress() {
         if (!cancelled) setMembers(data);
       } catch (err) {
         console.error('GroupProgress: first attempt failed:', err);
-        // Retry once after session refresh
+        // Retry once without calling refreshSession() (it can trigger SIGNED_OUT)
         try {
-          await supabase.auth.refreshSession();
           const data = await getAllMemberProgress(todayDayNumber);
           if (!cancelled) setMembers(data);
         } catch (retryErr) {

@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   type ReactNode,
 } from 'react';
 import type { User } from '@supabase/supabase-js';
@@ -85,6 +86,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Skip INITIAL_SESSION — we already handled it via getUser() above
       if (event === 'INITIAL_SESSION') return;
 
+      // Ignore SIGNED_OUT events that weren't triggered by the user explicitly
+      // signing out. A failed refreshSession() call can fire SIGNED_OUT and
+      // wipe auth state even though the user is still reading.
+      if (event === 'SIGNED_OUT') {
+        if (intentionalSignOut.current) {
+          intentionalSignOut.current = false;
+          setUser(null);
+          setProfile(null);
+        }
+        return;
+      }
+
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
@@ -111,7 +124,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   }
 
+  const intentionalSignOut = useRef(false);
+
   async function signOut() {
+    intentionalSignOut.current = true;
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);

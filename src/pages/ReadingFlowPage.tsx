@@ -11,13 +11,13 @@ import * as progressService from '@/services/progressService';
 import { supabase } from '@/services/supabase';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
-/** Try fn; on failure refresh auth session and retry once. */
-async function withSessionRetry<T>(fn: () => Promise<T>): Promise<T> {
+/** Try fn; on failure retry once (session refresh is handled by the periodic interval). */
+async function safeRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch {
-    // Actually refresh the auth token (getSession only reads cache)
-    await supabase.auth.refreshSession();
+    // Simple retry — don't call refreshSession() here because a failed
+    // refresh can fire SIGNED_OUT and wipe the entire auth state.
     return await fn();
   }
 }
@@ -63,6 +63,10 @@ export default function ReadingFlowPage() {
   const [checkedSet, setCheckedSet] = useState<Set<number>>(new Set());
   const [allDone, setAllDone] = useState(false);
   const checkingRef = useRef(false);
+  const currentIdxRef = useRef(currentIdx);
+  const checkedSetRef = useRef(checkedSet);
+  currentIdxRef.current = currentIdx;
+  checkedSetRef.current = checkedSet;
 
   const userId = user?.id;
 
@@ -105,17 +109,22 @@ export default function ReadingFlowPage() {
   );
 
   const handleCheck = useCallback(() => {
-    if (!current || !userId || checkingRef.current) return;
+    if (!userId || checkingRef.current) return;
     checkingRef.current = true;
 
-    // Compute new state synchronously from current closure
-    const newChecked = new Set(checkedSet);
-    newChecked.add(currentIdx);
+    // Always read latest values from refs to avoid stale closures
+    const idx = currentIdxRef.current;
+    const ch = chapters[idx];
+    if (!ch) { checkingRef.current = false; return; }
+
+    const newChecked = new Set(checkedSetRef.current);
+    newChecked.add(idx);
     setCheckedSet(newChecked);
+    checkedSetRef.current = newChecked;
 
     // Save chapter to DB in background (don't block UI)
-    withSessionRetry(() =>
-      progressService.toggleChapterComplete(userId, current.bookCode, current.chapter, true),
+    safeRetry(() =>
+      progressService.toggleChapterComplete(userId, ch.bookCode, ch.chapter, true),
     ).catch((err) => console.error('Failed to save chapter progress:', err));
 
     // All chapters done? → save day completion, then show completion screen
@@ -124,20 +133,24 @@ export default function ReadingFlowPage() {
         console.error('Failed to mark day complete:', err),
       );
       setAllDone(true);
-      setTimeout(() => { checkingRef.current = false; }, 300);
+      checkingRef.current = false;
       return;
     }
 
-    // Advance to next unchecked chapter immediately
-    const nextIdx = chapters.findIndex((_, i) => i > currentIdx && !newChecked.has(i));
+    // Advance to next unchecked chapter — always move forward
+    let nextIdx = chapters.findIndex((_, i) => i > idx && !newChecked.has(i));
+    if (nextIdx < 0) {
+      // Wrap around: find any remaining unchecked chapter
+      nextIdx = chapters.findIndex((_, i) => !newChecked.has(i));
+    }
     if (nextIdx >= 0) {
       setCurrentIdx(nextIdx);
+      currentIdxRef.current = nextIdx;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // Brief cooldown to prevent rapid double-clicks (ensures re-render with fresh closure)
-    setTimeout(() => { checkingRef.current = false; }, 300);
-  }, [current, currentIdx, checkedSet, chapters, userId, dayNumber, markDayComplete]);
+    checkingRef.current = false;
+  }, [chapters, userId, dayNumber, markDayComplete]);
 
   const handleManualCheck = useCallback((idx: number) => {
     if (!userId) return;
@@ -153,7 +166,7 @@ export default function ReadingFlowPage() {
     setCheckedSet(newChecked);
 
     // Save to DB in background
-    withSessionRetry(() =>
+    safeRetry(() =>
       progressService.toggleChapterComplete(userId, ch.bookCode, ch.chapter, !isChecked),
     ).catch((err) => console.error('Failed to save chapter progress:', err));
 

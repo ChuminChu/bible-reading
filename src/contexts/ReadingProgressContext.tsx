@@ -7,7 +7,6 @@ import {
   type ReactNode,
 } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/services/supabase';
 import * as progressService from '@/services/progressService';
 import { TOTAL_READING_DAYS } from '@/lib/constants';
 import type { ReadingProgress } from '@/types/progress';
@@ -24,17 +23,11 @@ interface ReadingProgressContextValue {
 
 const ReadingProgressContext = createContext<ReadingProgressContextValue | undefined>(undefined);
 
-/**
- * Try an async operation; on failure refresh the Supabase session and retry once.
- * Uses refreshSession() instead of getSession() because getSession() only reads
- * from local cache and does NOT renew an expired access token.
- */
-async function withSessionRetry<T>(fn: () => Promise<T>): Promise<T> {
+/** Try fn; on failure retry once without calling refreshSession() to avoid SIGNED_OUT side-effects. */
+async function safeRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch {
-    // Actually refresh the auth token (getSession only reads cache)
-    await supabase.auth.refreshSession();
     return await fn();
   }
 }
@@ -56,7 +49,7 @@ export function ReadingProgressProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const load = async () => {
       try {
-        const data = await withSessionRetry(() =>
+        const data = await safeRetry(() =>
           progressService.getReadingProgress(user.id),
         );
         if (cancelled) return;
@@ -92,7 +85,7 @@ export function ReadingProgressProvider({ children }: { children: ReactNode }) {
       });
 
       try {
-        await withSessionRetry(() =>
+        await safeRetry(() =>
           progressService.toggleDayComplete(user.id, dayNumber, newCompleted),
         );
       } catch (err) {
@@ -128,7 +121,7 @@ export function ReadingProgressProvider({ children }: { children: ReactNode }) {
       });
 
       try {
-        await withSessionRetry(() =>
+        await safeRetry(() =>
           progressService.toggleDayComplete(user.id, dayNumber, completed),
         );
       } catch (err) {
