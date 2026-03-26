@@ -11,14 +11,17 @@ import * as progressService from '@/services/progressService';
 import { supabase } from '@/services/supabase';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
-/** Try fn; on failure retry once (session refresh is handled by the periodic interval). */
+/** Try fn; on failure refresh session and retry once. */
 async function safeRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
-  } catch {
-    // Simple retry — don't call refreshSession() here because a failed
-    // refresh can fire SIGNED_OUT and wipe the entire auth state.
-    return await fn();
+  } catch (firstError) {
+    try { await supabase.auth.refreshSession(); } catch { /* ignore */ }
+    try {
+      return await fn();
+    } catch {
+      throw firstError;
+    }
   }
 }
 import { ChevronLeft, ArrowLeftRight, Check } from 'lucide-react';
@@ -72,9 +75,9 @@ export default function ReadingFlowPage() {
 
   // Keep auth session alive during long reading sessions (10-30+ min)
   useEffect(() => {
-    const REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
+    const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 minutes
     const interval = setInterval(() => {
-      supabase.auth.refreshSession();
+      supabase.auth.refreshSession().catch(() => {});
     }, REFRESH_INTERVAL);
     return () => clearInterval(interval);
   }, []);
@@ -82,7 +85,13 @@ export default function ReadingFlowPage() {
   // Load chapter-level progress from Supabase
   useEffect(() => {
     if (!userId || !plan) return;
-    progressService.getChapterProgress(userId).then((data) => {
+    const load = async () => {
+      let data = await safeRetry(() => progressService.getChapterProgress(userId));
+      // RLS returns empty when session expired — refresh and retry
+      if (data.length === 0) {
+        try { await supabase.auth.refreshSession(); } catch { /* ignore */ }
+        data = await safeRetry(() => progressService.getChapterProgress(userId));
+      }
       const checked = new Set<number>();
       chapters.forEach((ch, idx) => {
         if (data.some((p) => p.bookCode === ch.bookCode && p.chapterNumber === ch.chapter && p.completed)) {
@@ -99,7 +108,8 @@ export default function ReadingFlowPage() {
       // Start at first unchecked chapter
       const firstUnchecked = chapters.findIndex((_, i) => !checked.has(i));
       if (firstUnchecked >= 0) setCurrentIdx(firstUnchecked);
-    });
+    };
+    load().catch((err) => console.error('Failed to load chapter progress:', err));
   }, [userId]);
 
   const current = chapters[currentIdx];
@@ -127,13 +137,14 @@ export default function ReadingFlowPage() {
       progressService.toggleChapterComplete(userId, ch.bookCode, ch.chapter, true),
     ).catch((err) => console.error('Failed to save chapter progress:', err));
 
-    // All chapters done? → save day completion, then show completion screen
+    // All chapters done? → show completion immediately, save to DB in background
     if (newChecked.size === chapters.length) {
-      markDayComplete(dayNumber, true).catch((err) =>
-        console.error('Failed to mark day complete:', err),
-      );
       setAllDone(true);
       checkingRef.current = false;
+
+      // DB write in background — UI is already showing completion
+      markDayComplete(dayNumber, true)
+        .catch((err) => console.error('Failed to mark day complete:', err));
       return;
     }
 
@@ -172,10 +183,10 @@ export default function ReadingFlowPage() {
 
     // Check if all done
     if (newChecked.size === chapters.length) {
-      markDayComplete(dayNumber, true).catch((err) =>
-        console.error('Failed to mark day complete:', err),
-      );
-      setAllDone(true);
+      markDayComplete(dayNumber, true)
+        .catch((err) => console.error('Failed to mark day complete:', err))
+        .finally(() => setAllDone(true));
+      return;
     }
   }, [checkedSet, chapters, userId, dayNumber, markDayComplete]);
 

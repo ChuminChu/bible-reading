@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useReadingProgress } from '@/hooks/useReadingProgress';
 import { getDayNumber } from '@/lib/dayCalculation';
 import { getAllMemberProgress } from '@/services/communityService';
+import { supabase } from '@/services/supabase';
 import type { MemberProgress } from '@/services/communityService';
 import { Users, Check } from 'lucide-react';
 
 export default function GroupProgress() {
   const { user } = useAuth();
+  const { isDayCompleted, completedCount: myCompletedCount } = useReadingProgress();
   const [members, setMembers] = useState<MemberProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const todayDayNumber = getDayNumber(new Date());
+
+  // Use context to know current user's today-completion (optimistic, always fresh)
+  const myTodayCompleted = todayDayNumber ? isDayCompleted(todayDayNumber) : false;
 
   useEffect(() => {
     if (!user) return;
@@ -21,11 +27,16 @@ export default function GroupProgress() {
     let cancelled = false;
     const load = async () => {
       try {
-        const data = await getAllMemberProgress(todayDayNumber);
+        let data = await getAllMemberProgress(todayDayNumber);
+        // RLS returns empty (not error) when session is expired — refresh and retry
+        if (data.length === 0) {
+          try { await supabase.auth.refreshSession(); } catch { /* ignore */ }
+          data = await getAllMemberProgress(todayDayNumber);
+        }
         if (!cancelled) setMembers(data);
       } catch (err) {
         console.error('GroupProgress: first attempt failed:', err);
-        // Retry once without calling refreshSession() (it can trigger SIGNED_OUT)
+        try { await supabase.auth.refreshSession(); } catch { /* ignore */ }
         try {
           const data = await getAllMemberProgress(todayDayNumber);
           if (!cancelled) setMembers(data);
@@ -72,8 +83,19 @@ export default function GroupProgress() {
 
   if (members.length === 0) return null;
 
-  const sorted = [...members].sort((a, b) => b.completedDays - a.completedDays);
-  const todayCompletedCount = members.filter((m) => m.todayCompleted).length;
+  // Overlay context's optimistic state for the current user so the list is
+  // always up-to-date even before the DB write finishes.
+  const adjusted = members.map((m) => {
+    if (m.userId !== user?.id) return m;
+    return {
+      ...m,
+      todayCompleted: myTodayCompleted,
+      completedDays: myCompletedCount,
+    };
+  });
+
+  const sorted = [...adjusted].sort((a, b) => b.completedDays - a.completedDays);
+  const todayCompletedCount = adjusted.filter((m) => m.todayCompleted).length;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5">

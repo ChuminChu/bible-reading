@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import * as progressService from '@/services/progressService';
+import { supabase } from '@/services/supabase';
 import { TOTAL_READING_DAYS } from '@/lib/constants';
 import type { ReadingProgress } from '@/types/progress';
 
@@ -23,12 +24,17 @@ interface ReadingProgressContextValue {
 
 const ReadingProgressContext = createContext<ReadingProgressContextValue | undefined>(undefined);
 
-/** Try fn; on failure retry once without calling refreshSession() to avoid SIGNED_OUT side-effects. */
+/** Try fn; on failure refresh session and retry once. */
 async function safeRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
-  } catch {
-    return await fn();
+  } catch (firstError) {
+    try { await supabase.auth.refreshSession(); } catch { /* ignore */ }
+    try {
+      return await fn();
+    } catch {
+      throw firstError;
+    }
   }
 }
 
@@ -49,10 +55,21 @@ export function ReadingProgressProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const load = async () => {
       try {
-        const data = await safeRetry(() =>
+        let data = await safeRetry(() =>
           progressService.getReadingProgress(user.id),
         );
         if (cancelled) return;
+        // RLS returns empty (not error) when session is expired.
+        // Don't overwrite existing data with empty results.
+        if (data.length === 0 && progress.size > 0) {
+          try { await supabase.auth.refreshSession(); } catch { /* ignore */ }
+          data = await safeRetry(() =>
+            progressService.getReadingProgress(user.id),
+          );
+          if (cancelled) return;
+          // If still empty after refresh, keep existing data
+          if (data.length === 0) return;
+        }
         const map = new Map<number, ReadingProgress>();
         data.forEach((p) => map.set(p.dayNumber, p));
         setProgress(map);
@@ -109,6 +126,8 @@ export function ReadingProgressProvider({ children }: { children: ReactNode }) {
     async (dayNumber: number, completed: boolean) => {
       if (!user) return;
 
+      const previous = progress.get(dayNumber);
+
       // Optimistic update
       setProgress((prev) => {
         const next = new Map(prev);
@@ -126,9 +145,19 @@ export function ReadingProgressProvider({ children }: { children: ReactNode }) {
         );
       } catch (err) {
         console.error('Failed to mark day:', err);
+        // Revert on error
+        setProgress((prev) => {
+          const next = new Map(prev);
+          if (previous) {
+            next.set(dayNumber, previous);
+          } else {
+            next.delete(dayNumber);
+          }
+          return next;
+        });
       }
     },
-    [user],
+    [user, progress],
   );
 
   const completedCount = Array.from(progress.values()).filter((p) => p.completed).length;
