@@ -73,6 +73,16 @@ export default function ReadingFlowPage() {
 
   const userId = user?.id;
 
+  // Reset state when navigating to a different day
+  useEffect(() => {
+    setCurrentIdx(0);
+    currentIdxRef.current = 0;
+    setCheckedSet(new Set());
+    checkedSetRef.current = new Set();
+    setAllDone(false);
+    checkingRef.current = false;
+  }, [dayNumber]);
+
   // Keep auth session alive during long reading sessions (10-30+ min)
   useEffect(() => {
     const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 minutes
@@ -110,7 +120,7 @@ export default function ReadingFlowPage() {
       if (firstUnchecked >= 0) setCurrentIdx(firstUnchecked);
     };
     load().catch((err) => console.error('Failed to load chapter progress:', err));
-  }, [userId]);
+  }, [userId, dayNumber]);
 
   const current = chapters[currentIdx];
   const { data: bibleData, loading, error } = useBibleText(
@@ -230,6 +240,14 @@ export default function ReadingFlowPage() {
           {chapters.length}장을 모두 읽었습니다. 수고하셨습니다!
         </p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
+          {getDayPlan(dayNumber + 1) && (
+            <button
+              onClick={() => navigate(`/read/${dayNumber + 1}`)}
+              className="w-full px-8 py-3 bg-primary-500 text-white rounded-xl font-semibold hover:bg-primary-600 transition-colors"
+            >
+              다음 일차 통독하기 →
+            </button>
+          )}
           <button
             onClick={handleRestart}
             className="w-full px-8 py-3 border border-primary-300 text-primary-600 rounded-xl font-semibold hover:bg-primary-50 transition-colors"
@@ -238,7 +256,7 @@ export default function ReadingFlowPage() {
           </button>
           <button
             onClick={() => navigate('/')}
-            className="w-full px-8 py-3 bg-primary-500 text-white rounded-xl font-semibold hover:bg-primary-600 transition-colors"
+            className="w-full px-8 py-3 border border-gray-200 text-text-secondary rounded-xl font-semibold hover:bg-gray-50 transition-colors"
           >
             홈으로 돌아가기
           </button>
