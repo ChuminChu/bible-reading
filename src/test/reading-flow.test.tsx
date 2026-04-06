@@ -216,18 +216,14 @@ describe('통독 완료 → 홈 복귀 흐름', () => {
     const completeButton = screen.getByRole('button', { name: /체크하고 통독 완료/ });
     await user.click(completeButton);
 
-    // DB write is still pending (markDayCompleteResolve not called yet)
-    // The completion screen should NOT be shown yet
-    expect(screen.queryByText('오늘의 통독 완료!')).not.toBeInTheDocument();
-
-    // Now resolve the DB write
-    await act(async () => {
-      markDayCompleteResolve?.();
-    });
-
-    // NOW the completion screen should appear
+    // Completion screen should appear immediately (optimistic UI)
     await waitFor(() => {
       expect(screen.getByText('오늘의 통독 완료!')).toBeInTheDocument();
+    });
+
+    // Resolve the DB write in background
+    await act(async () => {
+      markDayCompleteResolve?.();
     });
 
     // Verify the DB was actually called

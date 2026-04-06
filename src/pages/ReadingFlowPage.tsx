@@ -193,9 +193,9 @@ export default function ReadingFlowPage() {
 
     // Check if all done
     if (newChecked.size === chapters.length) {
+      setAllDone(true);
       markDayComplete(dayNumber, true)
-        .catch((err) => console.error('Failed to mark day complete:', err))
-        .finally(() => setAllDone(true));
+        .catch((err) => console.error('Failed to mark day complete:', err));
       return;
     }
   }, [checkedSet, chapters, userId, dayNumber, markDayComplete]);
@@ -225,8 +225,22 @@ export default function ReadingFlowPage() {
     window.scrollTo(0, 0);
   }, [userId, chapters, dayNumber, markDayComplete]);
 
+  // Derive completion state from both allDone flag and checkedSet (safety net)
+  const isComplete = allDone || (checkedSet.size === chapters.length && chapters.length > 0);
+
+  // If all chapters are checked but allDone wasn't set yet, sync it and mark day complete
+  useEffect(() => {
+    if (checkedSet.size === chapters.length && chapters.length > 0 && !allDone) {
+      setAllDone(true);
+      if (userId) {
+        markDayComplete(dayNumber, true)
+          .catch((err) => console.error('Failed to mark day complete:', err));
+      }
+    }
+  }, [checkedSet.size, chapters.length, allDone, userId, dayNumber, markDayComplete]);
+
   // All done screen
-  if (allDone) {
+  if (isComplete) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-surface px-6">
         <div className="w-20 h-20 rounded-full bg-primary-100 flex items-center justify-center mb-6">
@@ -394,7 +408,7 @@ export default function ReadingFlowPage() {
           onClick={handleCheck}
           className="w-full py-3.5 bg-primary-500 text-white rounded-xl font-semibold hover:bg-primary-600 transition-colors text-sm"
         >
-          {checkedSet.size === chapters.length - 1 && !checkedSet.has(currentIdx)
+          {checkedSet.size >= chapters.length - 1 && !checkedSet.has(currentIdx)
             ? '체크하고 통독 완료'
             : '체크 후 다음 장으로'}
         </button>
