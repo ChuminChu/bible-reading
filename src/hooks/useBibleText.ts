@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getBibleChapter } from '@/services/bibleService';
 import { useBibleVersion } from '@/contexts/BibleVersionContext';
 import type { BibleChapter } from '@/types/bible';
@@ -8,6 +8,7 @@ export function useBibleText(bookCode: string, chapter: number) {
   const [data, setData] = useState<BibleChapter | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!bookCode || !chapter) {
@@ -37,7 +38,11 @@ export function useBibleText(bookCode: string, chapter: number) {
     return () => {
       cancelled = true;
     };
-  }, [version, bookCode, chapter]);
+  }, [version, bookCode, chapter, reloadKey]);
 
-  return { data, loading, error };
+  const refetch = useCallback(() => {
+    setReloadKey((k) => k + 1);
+  }, []);
+
+  return { data, loading, error, refetch };
 }

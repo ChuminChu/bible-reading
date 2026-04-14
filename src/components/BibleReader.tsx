@@ -3,7 +3,7 @@ import { useBibleText } from '@/hooks/useBibleText';
 import { useBibleVersion } from '@/contexts/BibleVersionContext';
 import { getBookByCode } from '@/data/bibleBooks';
 import LoadingSpinner from './LoadingSpinner';
-import { ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowLeftRight, RotateCw } from 'lucide-react';
 
 interface BibleReaderProps {
   bookCode: string;
@@ -20,7 +20,7 @@ export default function BibleReader({
   startVerse,
   onChapterChange,
 }: BibleReaderProps) {
-  const { data, loading, error } = useBibleText(bookCode, chapter);
+  const { data, loading, error, refetch } = useBibleText(bookCode, chapter);
   const { version, setVersion, versionName } = useBibleVersion();
   const book = getBookByCode(bookCode);
   const verseRef = useRef<HTMLParagraphElement>(null);
@@ -42,9 +42,19 @@ export default function BibleReader({
         <p className="text-text-secondary">
           {error || '성경 텍스트가 아직 준비되지 않았습니다.'}
         </p>
-        <p className="text-sm text-text-muted mt-2">
-          데이터가 업로드되면 이곳에서 읽을 수 있습니다.
-        </p>
+        {error ? (
+          <button
+            onClick={refetch}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
+          >
+            <RotateCw size={16} />
+            다시 불러오기
+          </button>
+        ) : (
+          <p className="text-sm text-text-muted mt-2">
+            데이터가 업로드되면 이곳에서 읽을 수 있습니다.
+          </p>
+        )}
       </div>
     );
   }
